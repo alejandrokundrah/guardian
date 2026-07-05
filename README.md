@@ -67,6 +67,33 @@ python app.py
 3. Start command : `gunicorn app:app --bind 0.0.0.0:$PORT`
 4. Free tier is sufficient
 
+Persistent storage on Render
+----------------------------
+
+By default Render services have ephemeral filesystem storage. To keep your SQLite database across restarts you must attach a Persistent Disk to your Web Service and point `DB_PATH` to that disk.
+
+1. In the Render dashboard open your Web Service settings → "Persistent Disk" and create/attach a disk.
+2. Set the environment variable `DB_PATH` in the Render dashboard to the path on the disk, for example `/data/guardian.db`.
+3. Update the Service Start Command to the usual `gunicorn app:app --bind 0.0.0.0:$PORT` — the app will use `DB_PATH` automatically.
+
+Example: in the Render Environment panel add a variable:
+
+```
+DB_PATH=/data/guardian.db
+```
+
+Using Postgres (recommended for production)
+-------------------------------------------
+
+If you expect concurrent writes, larger scale, or need a managed DB, use Postgres instead of SQLite. Steps:
+
+1. Provision a Postgres database (Render, Heroku, AWS RDS, etc.).
+2. Set the `DATABASE_URL` environment variable to the connection URL (e.g. `postgres://user:pass@host:5432/dbname`).
+3. Install additional dependencies: `psycopg2-binary` and `SQLAlchemy` (see `requirements.txt`).
+4. Run the migration script to copy existing data from SQLite to Postgres (see `migrate_sqlite_to_postgres.py`).
+
+When `DATABASE_URL` is set the migration script will create the tables in Postgres and copy rows from your local SQLite `guardian.db` into Postgres tables.
+
 ### Environment variables (set in the dashboard)
 
 | Variable     | Description                    | Default       |

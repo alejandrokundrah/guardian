@@ -4,3 +4,5 @@ APScheduler==3.10.4
 requests==2.31.0
 Werkzeug==3.0.3
 gunicorn==21.2.0
+SQLAlchemy==2.0.20
+psycopg2-binary==2.9.6

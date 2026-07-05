@@ -391,10 +391,10 @@ pause
     return Response(
         script,
         content_type='text/plain',
-        headers={{
+        headers={
             'Content-Disposition':
                 f'attachment; filename="Install_Guardian_{s["name"]}.ps1"'
-        }},
+        },
     )
 
 @app.route('/api/students/<int:sid>/profile/android')
