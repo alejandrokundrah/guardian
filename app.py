@@ -333,7 +333,11 @@ def android_config(sid):
             ),
         },
     })
-
+@app.route('/api/students/status-by-token/<token>')
+def api_status_by_token(token):
+    from rule_engine import check_access
+    allowed, reason = check_access('netflix.com', token)
+    return jsonify({'allowed': allowed, 'reason': reason})
 
 # ─────────────────────────────────────────────────────────────────────────────
 
