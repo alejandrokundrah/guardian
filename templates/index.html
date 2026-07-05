@@ -1,0 +1,259 @@
+{% extends 'base.html' %}
+{% block title %}Overview — Guardian{% endblock %}
+
+{% block extra_css %}
+/* ── Page header ────────────────────────────────────────────── */
+.page-header {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  margin-bottom: 2rem; gap: 1rem; flex-wrap: wrap;
+}
+.page-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.7rem; font-weight: 700;
+  color: var(--text-hi); letter-spacing: -.03em;
+}
+.page-sub { color: var(--text-dim); font-size: .875rem; margin-top: 3px; }
+
+/* ── Student grid ───────────────────────────────────────────── */
+.student-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 1.1rem;
+}
+
+.student-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 1.4rem;
+  cursor: pointer; transition: all .22s;
+  text-decoration: none; display: block;
+  position: relative; overflow: hidden;
+}
+.student-card::after {
+  content:''; position: absolute;
+  top:0; left:0; right:0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0; transition: opacity .3s;
+}
+.student-card:hover {
+  border-color: var(--border-h);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 36px rgba(0,0,0,.35);
+}
+.student-card:hover::after { opacity: 1; }
+.student-card.is-blocked { border-color: rgba(255,69,105,.28); }
+.student-card.is-blocked::after {
+  background: linear-gradient(90deg, transparent, var(--red), transparent);
+  opacity: 1;
+}
+
+/* card top */
+.card-top {
+  display: flex; align-items: center; gap: 1rem; margin-bottom: 1.2rem;
+}
+.avatar-wrap { position: relative; flex-shrink: 0; }
+.avatar {
+  width: 48px; height: 48px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--surface-2), rgba(0,194,255,.1));
+  border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.2rem; font-weight: 700; color: var(--accent);
+}
+.status-ring {
+  position: absolute; inset: -4px; border-radius: 50%;
+  border: 2px solid transparent; pointer-events: none;
+}
+.ring-green .status-ring {
+  border-color: var(--green);
+  animation: ring-pulse 2.2s ease-in-out infinite;
+}
+.ring-red .status-ring { border-color: var(--red); }
+.ring-amber .status-ring { border-color: var(--amber); }
+
+@keyframes ring-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(0,230,118,.45); }
+  50%      { box-shadow: 0 0 0 6px rgba(0,230,118,0); }
+}
+
+.card-name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.05rem; font-weight: 600;
+  color: var(--text-hi);
+}
+.card-status-row { margin-top: 4px; }
+
+/* Usage bar */
+.usage-block { margin-top: 1rem; }
+.usage-header {
+  display: flex; justify-content: space-between;
+  font-size: .75rem; color: var(--text-dim); margin-bottom: 6px;
+}
+.usage-val { color: var(--text); font-weight: 500; }
+.usage-track {
+  height: 3px; background: var(--surface-2); border-radius: 2px; overflow: hidden;
+}
+.usage-fill {
+  height: 100%; border-radius: 2px; transition: width .5s ease;
+}
+.fill-ok    { background: var(--accent); }
+.fill-warn  { background: var(--amber);  }
+.fill-full  { background: var(--red);    }
+
+/* card footer */
+.card-footer { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 1rem; }
+
+/* ── Empty state ────────────────────────────────────────────── */
+.empty { text-align: center; padding: 5rem 2rem; }
+.empty-icon  { font-size: 3.5rem; margin-bottom: 1rem; }
+.empty-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.2rem; font-weight: 600;
+  color: var(--text-hi); margin-bottom: .5rem;
+}
+.empty-sub { color: var(--text-dim); margin-bottom: 1.5rem; }
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Students</h1>
+      <p class="page-sub">{{ students|length }} profile{{ 's' if students|length != 1 else '' }} · Guardian DNS active</p>
+    </div>
+    <button class="btn btn-primary" onclick="openAdd()">+ Add Student</button>
+  </div>
+
+  {% if students %}
+  <div class="student-grid">
+    {% for s in students %}
+    {% set pct = [((s.minutes_today / s.daily_limit_minutes * 100) if s.daily_limit_minutes else 0)|round|int, 100]|min %}
+    {% set fill = 'fill-full' if pct >= 100 else 'fill-warn' if pct >= 75 else 'fill-ok' %}
+    {% set ring = 'ring-red' if s.emergency_blocked else ('ring-amber' if pct >= 100 else 'ring-green') %}
+    {% set blocked = s.emergency_blocked %}
+
+    <a href="/student/{{ s.id }}"
+       class="student-card {{ 'is-blocked' if blocked else '' }}">
+
+      <div class="card-top">
+        <div class="avatar-wrap {{ ring }}">
+          <div class="avatar">{{ s.name[0].upper() }}</div>
+          <div class="status-ring"></div>
+        </div>
+        <div style="flex:1; min-width:0;">
+          <div class="card-name">{{ s.name }}</div>
+          <div class="card-status-row">
+            {% if blocked %}
+              <span class="badge badge-red"><span class="dot"></span>Blocked</span>
+            {% elif pct >= 100 %}
+              <span class="badge badge-amber"><span class="dot"></span>Limit reached</span>
+            {% else %}
+              <span class="badge badge-green"><span class="dot"></span>Active</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="usage-block">
+        <div class="usage-header">
+          <span>Today's watch time</span>
+          <span class="usage-val">{{ s.minutes_today|int }}m / {{ s.daily_limit_minutes }}m</span>
+        </div>
+        <div class="usage-track">
+          <div class="usage-fill {{ fill }}" style="width:{{ pct }}%"></div>
+        </div>
+      </div>
+
+      <div class="card-footer">
+        <span class="badge badge-blue">
+          🕐 {{ '%02d'|format(s.start_hour) }}:00–{{ '%02d'|format(s.end_hour) }}:00
+        </span>
+        <span class="badge badge-muted">{{ s.allowed_days|length }}d / week</span>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon">🛡️</div>
+    <div class="empty-title">No students yet</div>
+    <p class="empty-sub">Add your first student to start managing their access.</p>
+    <button class="btn btn-primary" onclick="openAdd()">+ Add Student</button>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── Add Student Modal ──────────────────────────────────────── -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <h2 class="modal-title">Add Student</h2>
+
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input id="a-name" class="form-input" type="text" placeholder="e.g. Amadou" autocomplete="off">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Allowed Days</label>
+      <div class="days-grid">
+        {% for lbl, idx in [('Mo',0),('Tu',1),('We',2),('Th',3),('Fr',4),('Sa',5),('Su',6)] %}
+        <div class="day-toggle active" data-day="{{ idx }}"
+             onclick="this.classList.toggle('active')">{{ lbl }}</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Start (hour 0–23)</label>
+        <input id="a-start" class="form-input" type="number" value="19" min="0" max="23">
+      </div>
+      <div class="form-group">
+        <label class="form-label">End (hour 0–23)</label>
+        <input id="a-end" class="form-input" type="number" value="22" min="0" max="23">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Daily limit (minutes)</label>
+      <input id="a-limit" class="form-input" type="number" value="120" min="0" max="1440">
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAdd()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAdd()">Add Student</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+const addModal = document.getElementById('addModal');
+function openAdd()  { addModal.classList.add('open'); }
+function closeAdd() { addModal.classList.remove('open'); }
+addModal.addEventListener('click', e => { if (e.target===addModal) closeAdd(); });
+
+async function submitAdd() {
+  const name = document.getElementById('a-name').value.trim();
+  if (!name) return showToast('Please enter a name', 'error');
+  const days = [...document.querySelectorAll('#addModal .day-toggle.active')]
+                 .map(d => +d.dataset.day);
+  const body = {
+    name,
+    allowed_days: days,
+    start_hour:  +document.getElementById('a-start').value,
+    end_hour:    +document.getElementById('a-end').value,
+    daily_limit: +document.getElementById('a-limit').value,
+  };
+  const r = await fetch('/api/students', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  if (r.ok) {
+    showToast('✅ Student added!', 'success');
+    setTimeout(()=>location.reload(), 900);
+  } else {
+    showToast('Failed to add student', 'error');
+  }
+}
+{% endblock %}

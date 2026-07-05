@@ -1,0 +1,307 @@
+{% extends 'base.html' %}
+{% block title %}{{ student.name }} — Guardian{% endblock %}
+
+{% block extra_css %}
+.back { display:inline-flex; align-items:center; gap:6px; color:var(--text-dim); font-size:.85rem; text-decoration:none; margin-bottom:1.5rem; transition:color .18s; }
+.back:hover { color:var(--accent); }
+
+/* ── Student header ────────────────────────────────────── */
+.s-header { display:flex; align-items:center; gap:1.25rem; margin-bottom:2rem; flex-wrap:wrap; }
+.s-avatar {
+  width:68px; height:68px; border-radius:50%; flex-shrink:0;
+  background: linear-gradient(135deg, var(--surface-2), rgba(0,194,255,.12));
+  border:2px solid var(--accent);
+  box-shadow: 0 0 22px rgba(0,194,255,.18);
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Space Grotesk',sans-serif; font-size:1.9rem; font-weight:700; color:var(--accent);
+}
+.s-info h1 {
+  font-family:'Space Grotesk',sans-serif; font-size:1.65rem; font-weight:700;
+  color:var(--text-hi); letter-spacing:-.03em;
+}
+.s-token { font-family:'JetBrains Mono',monospace; font-size:.75rem; color:var(--text-dim); margin-top:4px; }
+.s-token span { color:var(--accent); }
+.s-actions { margin-left:auto; display:flex; gap:7px; flex-wrap:wrap; }
+
+/* ── Stats row ─────────────────────────────────────────── */
+.stats-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:1rem; margin-bottom:1.75rem; }
+.stat { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1.15rem; }
+.stat-lbl { font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); margin-bottom:6px; }
+.stat-val { font-family:'Space Grotesk',sans-serif; font-size:1.65rem; font-weight:700; color:var(--text-hi); letter-spacing:-.03em; }
+.stat-val span { font-size:.95rem; font-weight:400; color:var(--text-dim); }
+.stat-sub { font-size:.76rem; color:var(--text-dim); margin-top:3px; }
+
+/* ── Two-col grid ──────────────────────────────────────── */
+.two-col { display:grid; grid-template-columns:1fr 1fr; gap:1.1rem; margin-bottom:1.75rem; }
+@media(max-width:700px){ .two-col { grid-template-columns:1fr; } }
+
+/* ── Setting rows ──────────────────────────────────────── */
+.s-row { display:flex; align-items:center; justify-content:space-between; padding:11px 0; border-bottom:1px solid var(--border); }
+.s-row:last-child { border-bottom:none; }
+.s-lbl { font-size:.85rem; color:var(--text-dim); }
+.s-val { font-size:.85rem; color:var(--text-hi); font-weight:500; }
+.days-chips { display:flex; gap:5px; flex-wrap:wrap; }
+.chip { padding:3px 8px; border-radius:5px; font-size:.7rem; font-weight:600; }
+.chip-on  { background:var(--accent-dim); color:var(--accent); }
+.chip-off { background:var(--surface-2);  color:var(--text-dim); }
+
+/* ── Profile buttons ───────────────────────────────────── */
+.profile-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:.85rem; }
+.profile-btn {
+  display:flex; flex-direction:column; align-items:center; gap:5px;
+  padding:1rem .5rem; border-radius:11px;
+  background:var(--surface-2); border:1px solid var(--border);
+  color:var(--text); cursor:pointer; transition:all .2s;
+  text-decoration:none; font-size:.78rem; font-weight:500; text-align:center;
+}
+.profile-btn:hover { border-color:var(--border-h); background:var(--accent-dim); color:var(--accent); transform:translateY(-2px); }
+.profile-icon { font-size:1.4rem; }
+
+.token-box {
+  margin-top:.85rem; padding:10px 12px;
+  background:var(--surface-2); border-radius:8px;
+  font-size:.72rem; color:var(--text-dim); word-break:break-all;
+}
+.token-box code { font-family:'JetBrains Mono',monospace; color:var(--accent); font-size:.75rem; }
+
+/* ── Logs table ────────────────────────────────────────── */
+.log-tbl { width:100%; border-collapse:collapse; }
+.log-tbl th { text-align:left; font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); padding:0 12px 10px; font-weight:500; }
+.log-tbl td { padding:10px 12px; font-size:.83rem; border-top:1px solid var(--border); }
+.log-tbl tr:hover td { background:rgba(255,255,255,.018); }
+
+.ab { display:inline-flex; align-items:center; gap:4px; font-size:.7rem; font-weight:600; padding:2px 9px; border-radius:20px; }
+{% endblock %}
+
+{% block content %}
+{% set pct = [((student.minutes_today / student.daily_limit_minutes * 100) if student.daily_limit_minutes else 0)|round|int, 100]|min %}
+{% set day_names = ['Mo','Tu','We','Th','Fr','Sa','Su'] %}
+<div class="container">
+
+  <a href="/" class="back">← All Students</a>
+
+  <div class="s-header">
+    <div class="s-avatar">{{ student.name[0].upper() }}</div>
+    <div class="s-info">
+      <h1>{{ student.name }}</h1>
+      <div class="s-token">
+        Token: <span>{{ student.token[:10] }}…</span>
+      </div>
+    </div>
+    <div class="s-actions">
+      {% if student.emergency_blocked %}
+      <button class="btn btn-success"  onclick="setBlock(false)">🟢 Unblock</button>
+      {% else %}
+      <button class="btn btn-danger"   onclick="setBlock(true)">🔴 Block</button>
+      {% endif %}
+      <button class="btn btn-ghost"    onclick="openEdit()">✏️ Edit</button>
+      <button class="btn btn-ghost" style="color:var(--red)" onclick="delStudent()">🗑️</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat">
+      <div class="stat-lbl">Today's Usage</div>
+      <div class="stat-val">{{ student.minutes_today|int }}<span>m</span></div>
+      <div class="stat-sub">of {{ student.daily_limit_minutes }}m · {{ pct }}%</div>
+    </div>
+    <div class="stat">
+      <div class="stat-lbl">Time Window</div>
+      <div class="stat-val" style="font-size:1.3rem">{{ '%02d'|format(student.start_hour) }}–{{ '%02d'|format(student.end_hour) }}</div>
+      <div class="stat-sub">{{ student.end_hour - student.start_hour }}h window</div>
+    </div>
+    <div class="stat">
+      <div class="stat-lbl">Days / Week</div>
+      <div class="stat-val">{{ student.allowed_days|length }}</div>
+      <div class="stat-sub">allowed days</div>
+    </div>
+    <div class="stat">
+      <div class="stat-lbl">Status</div>
+      {% if student.emergency_blocked %}
+        <div class="stat-val" style="color:var(--red)">Blocked</div>
+        <div class="stat-sub">Emergency block ON</div>
+      {% elif pct >= 100 %}
+        <div class="stat-val" style="color:var(--amber)">Limit</div>
+        <div class="stat-sub">Daily cap reached</div>
+      {% else %}
+        <div class="stat-val" style="color:var(--green)">OK</div>
+        <div class="stat-sub">Rules active</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="two-col">
+    <!-- Rules card -->
+    <div class="card">
+      <div class="section-title">Active Rules</div>
+      <div class="s-row">
+        <span class="s-lbl">Allowed Days</span>
+        <div class="days-chips">
+          {% for i in range(7) %}
+          <span class="chip {{ 'chip-on' if i in student.allowed_days else 'chip-off' }}">
+            {{ day_names[i] }}
+          </span>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="s-row">
+        <span class="s-lbl">Time Window</span>
+        <span class="s-val">{{ '%02d'|format(student.start_hour) }}:00 – {{ '%02d'|format(student.end_hour) }}:00</span>
+      </div>
+      <div class="s-row">
+        <span class="s-lbl">Daily Limit</span>
+        <span class="s-val">{{ student.daily_limit_minutes }} minutes</span>
+      </div>
+      <div class="s-row">
+        <span class="s-lbl">Emergency Block</span>
+        <span class="s-val" style="color:{{ 'var(--red)' if student.emergency_blocked else 'var(--green)' }}">
+          {{ 'ON' if student.emergency_blocked else 'OFF' }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Profiles card -->
+    <div class="card">
+      <div class="section-title">Install on Devices</div>
+      <p style="font-size:.83rem;color:var(--text-dim)">
+        Download the right profile for each of {{ student.name }}'s devices.
+        Install once — rules apply automatically everywhere.
+      </p>
+      <div class="profile-grid">
+        <a href="/api/students/{{ student.id }}/profile/ios" class="profile-btn" download>
+          <span class="profile-icon">🍎</span>iOS Profile
+        </a>
+        <a href="/api/students/{{ student.id }}/profile/windows" class="profile-btn" download>
+          <span class="profile-icon">🪟</span>Windows .ps1
+        </a>
+        <a href="/api/students/{{ student.id }}/profile/android" class="profile-btn" target="_blank">
+          <span class="profile-icon">🤖</span>Android Guide
+        </a>
+      </div>
+      <div class="token-box">
+        🔑 Full token: <code>{{ student.token }}</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- Activity log -->
+  <div class="card">
+    <div class="section-title">Recent Activity</div>
+    {% if logs %}
+    <div style="overflow-x:auto">
+    <table class="log-tbl">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Domain</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in logs %}
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--text-dim);white-space:nowrap">
+            {{ l.timestamp }}
+          </td>
+          <td style="font-family:'JetBrains Mono',monospace;font-size:.8rem">{{ l.domain }}</td>
+          <td>
+            {% if l.action=='allowed' %}
+              <span class="ab badge-green"><span class="dot"></span>Allowed</span>
+            {% elif l.action=='blocked_emergency' %}
+              <span class="ab badge-red"><span class="dot"></span>Emergency</span>
+            {% elif l.action=='blocked_day' %}
+              <span class="ab badge-amber"><span class="dot"></span>Wrong Day</span>
+            {% elif l.action=='blocked_time' %}
+              <span class="ab badge-amber"><span class="dot"></span>Outside Window</span>
+            {% elif l.action=='blocked_limit' %}
+              <span class="ab badge-red"><span class="dot"></span>Limit Reached</span>
+            {% else %}
+              <span class="ab badge-muted">{{ l.action }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p style="color:var(--text-dim);text-align:center;padding:2rem 0">No activity recorded yet</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <h2 class="modal-title">Edit {{ student.name }}</h2>
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input id="e-name" class="form-input" value="{{ student.name }}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Allowed Days</label>
+      <div class="days-grid" id="e-days">
+        {% for lbl,idx in [('Mo',0),('Tu',1),('We',2),('Th',3),('Fr',4),('Sa',5),('Su',6)] %}
+        <div class="day-toggle {{ 'active' if idx in student.allowed_days else '' }}"
+             data-day="{{ idx }}" onclick="this.classList.toggle('active')">{{ lbl }}</div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Start Hour</label>
+        <input id="e-start" class="form-input" type="number" value="{{ student.start_hour }}" min="0" max="23">
+      </div>
+      <div class="form-group">
+        <label class="form-label">End Hour</label>
+        <input id="e-end" class="form-input" type="number" value="{{ student.end_hour }}" min="0" max="23">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Daily Limit (minutes)</label>
+      <input id="e-limit" class="form-input" type="number" value="{{ student.daily_limit_minutes }}">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeEdit()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+const eModal = document.getElementById('editModal');
+function openEdit()  { eModal.classList.add('open'); }
+function closeEdit() { eModal.classList.remove('open'); }
+eModal.addEventListener('click', e => { if(e.target===eModal) closeEdit(); });
+
+async function saveEdit() {
+  const days = [...document.querySelectorAll('#e-days .day-toggle.active')].map(d=>+d.dataset.day);
+  const r = await fetch('/api/students/{{ student.id }}', {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      name:         document.getElementById('e-name').value.trim(),
+      allowed_days: days,
+      start_hour:  +document.getElementById('e-start').value,
+      end_hour:    +document.getElementById('e-end').value,
+      daily_limit: +document.getElementById('e-limit').value,
+    })
+  });
+  if (r.ok) { showToast('✅ Saved', 'success'); setTimeout(()=>location.reload(), 800); }
+}
+
+async function setBlock(block) {
+  const r = await fetch('/api/students/{{ student.id }}/emergency', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({blocked:block})
+  });
+  if (r.ok) { showToast(block?'🔴 Blocked':'🟢 Unblocked', block?'error':'success'); setTimeout(()=>location.reload(),800); }
+}
+
+async function delStudent() {
+  if (!confirm('Delete {{ student.name }}? This cannot be undone.')) return;
+  const r = await fetch('/api/students/{{ student.id }}', {method:'DELETE'});
+  if (r.ok) { showToast('Deleted','error'); setTimeout(()=>location.href='/', 700); }
+}
+{% endblock %}

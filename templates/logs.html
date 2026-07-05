@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% block title %}Activity Logs — Guardian{% endblock %}
+
+{% block extra_css %}
+.page-header { display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:1.75rem; flex-wrap:wrap; gap:1rem; }
+.page-title { font-family:'Space Grotesk',sans-serif; font-size:1.7rem; font-weight:700; color:var(--text-hi); letter-spacing:-.03em; }
+.page-sub { color:var(--text-dim); font-size:.875rem; margin-top:3px; }
+
+.filter-bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:1.25rem; }
+.filter-sel {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; padding:7px 14px;
+  color:var(--text); font-size:.85rem; outline:none; cursor:pointer;
+  transition:border-color .18s;
+}
+.filter-sel:focus { border-color:var(--accent); }
+
+.log-tbl { width:100%; border-collapse:collapse; }
+.log-tbl th { text-align:left; font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); padding:0 14px 11px; font-weight:500; }
+.log-tbl td { padding:10px 14px; font-size:.83rem; border-top:1px solid var(--border); }
+.log-tbl tr.log-row:hover td { background:rgba(255,255,255,.02); }
+.ab { display:inline-flex; align-items:center; gap:4px; font-size:.7rem; font-weight:600; padding:2px 9px; border-radius:20px; }
+
+.empty-logs { text-align:center; padding:3.5rem; color:var(--text-dim); }
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Activity Logs</h1>
+      <p class="page-sub">{{ logs|length }} recent events</p>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <select id="f-student" class="filter-sel" onchange="applyFilter()">
+      <option value="">All Students</option>
+      {% for s in students %}
+      <option value="{{ s.id }}">{{ s.name }}</option>
+      {% endfor %}
+    </select>
+    <select id="f-action" class="filter-sel" onchange="applyFilter()">
+      <option value="">All Results</option>
+      <option value="allowed">Allowed only</option>
+      <option value="blocked">Blocked only</option>
+    </select>
+  </div>
+
+  <div class="card" style="padding:0;overflow:hidden">
+    {% if logs %}
+    <div style="overflow-x:auto">
+    <table class="log-tbl">
+      <thead style="background:var(--surface);">
+        <tr>
+          <th>Timestamp</th>
+          <th>Student</th>
+          <th>Domain</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody id="log-body">
+        {% for l in logs %}
+        <tr class="log-row"
+            data-student="{{ l.student_id }}"
+            data-type="{{ 'allowed' if l.action=='allowed' else 'blocked' }}">
+          <td style="font-family:'JetBrains Mono',monospace;font-size:.73rem;color:var(--text-dim);white-space:nowrap">
+            {{ l.timestamp }}
+          </td>
+          <td>
+            <a href="/student/{{ l.student_id }}"
+               style="color:var(--accent);font-weight:500;text-decoration:none">
+              {{ l.student_name }}
+            </a>
+          </td>
+          <td style="font-family:'JetBrains Mono',monospace;font-size:.78rem">{{ l.domain }}</td>
+          <td>
+            {% if l.action=='allowed' %}
+              <span class="ab badge-green"><span class="dot"></span>Allowed</span>
+            {% elif l.action=='blocked_emergency' %}
+              <span class="ab badge-red"><span class="dot"></span>Emergency</span>
+            {% elif l.action=='blocked_day' %}
+              <span class="ab badge-amber"><span class="dot"></span>Wrong Day</span>
+            {% elif l.action=='blocked_time' %}
+              <span class="ab badge-amber"><span class="dot"></span>Outside Window</span>
+            {% elif l.action=='blocked_limit' %}
+              <span class="ab badge-red"><span class="dot"></span>Limit Reached</span>
+            {% else %}
+              <span class="ab badge-muted">{{ l.action }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-logs">No activity recorded yet.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+function applyFilter() {
+  const sid    = document.getElementById('f-student').value;
+  const action = document.getElementById('f-action').value;
+  document.querySelectorAll('.log-row').forEach(row => {
+    const okStu = !sid    || row.dataset.student === sid;
+    const okAct = !action || row.dataset.type    === action;
+    row.style.display = (okStu && okAct) ? '' : 'none';
+  });
+}
+{% endblock %}
