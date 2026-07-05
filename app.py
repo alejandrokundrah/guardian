@@ -231,78 +231,171 @@ def windows_profile(sid):
         abort(404)
 
     script = f'''# ================================================================
-# Guardian DNS Installer  —  {s['name']}
-# Run as Administrator in PowerShell
+# Guardian Installer — {s['name']}
+# Right-click this file and select "Run with PowerShell"
 # ================================================================
 
 $ErrorActionPreference = "Stop"
-$name   = "{s['name']}"
-$dohUrl = "{doh_url}"
 
 Write-Host ""
-Write-Host "  Guardian DNS Installer" -ForegroundColor Cyan
-Write-Host "  Student : $name"        -ForegroundColor White
-Write-Host "  Server  : $dohUrl"      -ForegroundColor DarkGray
+Write-Host "  Guardian Parental Control" -ForegroundColor Cyan
+Write-Host "  Installing for: {s['name']}" -ForegroundColor White
 Write-Host ""
 
-# Verify admin rights
+# Check admin
 $admin = ([Security.Principal.WindowsPrincipal]
           [Security.Principal.WindowsIdentity]::GetCurrent()
          ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $admin) {{
-    Write-Host "  ERROR: Run this script as Administrator" -ForegroundColor Red
+    Write-Host "  ERROR: Please right-click and Run as Administrator" -ForegroundColor Red
+    pause
     exit 1
 }}
 
-# Step 1 — Register DoH template
-Write-Host "  [1/4] Registering DNS-over-HTTPS template..." -ForegroundColor Yellow
-foreach ($ip in @("8.8.8.8", "8.8.4.4")) {{
-    try {{
-        Add-DnsClientDohServerAddress `
-            -ServerAddress $ip `
-            -DohTemplate   $dohUrl `
-            -AllowFallbackToUdp $False `
-            -AutoUpgrade        $True `
-            -ErrorAction SilentlyContinue
-    }} catch {{
-        Write-Host "  (template may already exist, continuing)" -ForegroundColor DarkGray
-    }}
-}}
+# ── Step 1 — Create agent file ────────────────────────────────
+Write-Host "  [1/6] Creating Guardian agent..." -ForegroundColor Yellow
+New-Item -Path "C:\\Guardian" -ItemType Directory -Force | Out-Null
 
-# Step 2 — Apply to all active adapters
-Write-Host "  [2/4] Applying to network adapters..." -ForegroundColor Yellow
-Get-NetAdapter | Where-Object {{ $_.Status -eq "Up" }} | ForEach-Object {{
-    Set-DnsClientServerAddress -InterfaceIndex $_.InterfaceIndex `
-        -ServerAddresses @("8.8.8.8", "8.8.4.4")
-}}
+$agentCode = @'
+import requests, time
 
-# Step 3 — Enforce DoH via Group Policy registry key
-Write-Host "  [3/4] Locking DNS settings..." -ForegroundColor Yellow
-$reg = "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient"
-if (-not (Test-Path $reg)) {{ New-Item -Path $reg -Force | Out-Null }}
-Set-ItemProperty -Path $reg -Name "DoHPolicy"           -Value 2 -Type DWord
-Set-ItemProperty -Path $reg -Name "EnableAutoDoh"       -Value 2 -Type DWord
+SERVER = "https://guardian-1hfv.onrender.com"
+TOKEN  = "{s['token']}"
+HOSTS  = r"C:\\Windows\\System32\\drivers\\etc\\hosts"
 
-# Step 4 — Flush cache
-Write-Host "  [4/4] Flushing DNS cache..." -ForegroundColor Yellow
+NETFLIX_DOMAINS = [
+    "netflix.com", "www.netflix.com", "api.netflix.com",
+    "nflxvideo.net", "nflximg.net", "nflxext.com",
+    "nflxso.net", "fast.com", "netflix.net",
+    "nflxso.com", "nflximg.com"
+]
+
+MARKER_START = "# --- GUARDIAN START ---"
+MARKER_END   = "# --- GUARDIAN END ---"
+
+def clean_hosts():
+    with open(HOSTS, "r") as f:
+        lines = f.readlines()
+    out, inside = [], False
+    for line in lines:
+        if MARKER_START in line:  inside = True
+        elif MARKER_END in line:  inside = False
+        elif not inside:          out.append(line)
+    with open(HOSTS, "w") as f:
+        f.writelines(out)
+
+def block_netflix():
+    clean_hosts()
+    with open(HOSTS, "a") as f:
+        f.write(f"\\n{{MARKER_START}}\\n")
+        for d in NETFLIX_DOMAINS:
+            f.write(f"0.0.0.0 {{d}}\\n")
+        f.write(f"{{MARKER_END}}\\n")
+    print("[GUARDIAN] BLOCKED")
+
+def allow_netflix():
+    clean_hosts()
+    print("[GUARDIAN] ALLOWED")
+
+def check():
+    try:
+        r = requests.get(
+            f"{{SERVER}}/api/students/status-by-token/{{TOKEN}}",
+            timeout=5
+        )
+        return r.json().get("allowed", False)
+    except:
+        return False
+
+print("[GUARDIAN] Agent running...")
+while True:
+    try:
+        if check(): allow_netflix()
+        else:        block_netflix()
+    except Exception as e:
+        print(f"[GUARDIAN] Error: {{e}}")
+        block_netflix()
+    time.sleep(60)
+'@
+
+$agentCode | Out-File -FilePath "C:\\Guardian\\agent.py" -Encoding UTF8 -Force
+Write-Host "  [1/6] Agent created" -ForegroundColor Green
+
+# ── Step 2 — Install Python requests ─────────────────────────
+Write-Host "  [2/6] Installing dependencies..." -ForegroundColor Yellow
+pip install requests --quiet
+Write-Host "  [2/6] Dependencies installed" -ForegroundColor Green
+
+# ── Step 3 — Disable browser DoH so hosts file works ─────────
+Write-Host "  [3/6] Disabling browser built-in DNS..." -ForegroundColor Yellow
+
+# Chrome
+$chromePol = "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome"
+if (-not (Test-Path $chromePol)) {{ New-Item -Path $chromePol -Force | Out-Null }}
+Set-ItemProperty -Path $chromePol -Name "DnsOverHttpsMode" -Value "off" -Type String
+
+# Edge
+$edgePol = "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge"
+if (-not (Test-Path $edgePol)) {{ New-Item -Path $edgePol -Force | Out-Null }}
+Set-ItemProperty -Path $edgePol -Name "DnsOverHttpsMode" -Value "off" -Type String
+
+# Firefox
+$ffPol = "HKLM:\\SOFTWARE\\Policies\\Mozilla\\Firefox"
+if (-not (Test-Path $ffPol)) {{ New-Item -Path $ffPol -Force | Out-Null }}
+Set-ItemProperty -Path $ffPol -Name "DNSOverHTTPS" -Value 0 -Type DWord
+
+Write-Host "  [3/6] Browser DNS locked" -ForegroundColor Green
+
+# ── Step 4 — Register as Windows startup task ─────────────────
+Write-Host "  [4/6] Registering startup task..." -ForegroundColor Yellow
+
+$action   = New-ScheduledTaskAction -Execute "python" -Argument "C:\\Guardian\\agent.py"
+$trigger  = New-ScheduledTaskTrigger -AtStartup
+$settings = New-ScheduledTaskSettingsSet `
+              -ExecutionTimeLimit 0 `
+              -RestartCount 99 `
+              -RestartInterval (New-TimeSpan -Minutes 1)
+
+Register-ScheduledTask `
+  -TaskName "GuardianAgent" `
+  -Action   $action `
+  -Trigger  $trigger `
+  -Settings $settings `
+  -RunLevel Highest `
+  -Force | Out-Null
+
+Write-Host "  [4/6] Startup task registered" -ForegroundColor Green
+
+# ── Step 5 — Lock DNS settings ────────────────────────────────
+Write-Host "  [5/6] Applying DNS settings..." -ForegroundColor Yellow
+Set-DnsClientServerAddress -InterfaceAlias "Wi-Fi" `
+  -ServerAddresses @("8.8.8.8","8.8.4.4") -ErrorAction SilentlyContinue
+Set-DnsClientServerAddress -InterfaceAlias "Ethernet" `
+  -ServerAddresses @("8.8.8.8","8.8.4.4") -ErrorAction SilentlyContinue
 Clear-DnsClientCache
-ipconfig /flushdns | Out-Null
+Write-Host "  [5/6] DNS configured" -ForegroundColor Green
+
+# ── Step 6 — Start the agent now ─────────────────────────────
+Write-Host "  [6/6] Starting Guardian agent..." -ForegroundColor Yellow
+Start-ScheduledTask -TaskName "GuardianAgent"
+Write-Host "  [6/6] Agent running in background" -ForegroundColor Green
 
 Write-Host ""
-Write-Host "  SUCCESS — Guardian DNS installed for $name" -ForegroundColor Green
-Write-Host "  This device is now protected."              -ForegroundColor Green
+Write-Host "  Guardian installed successfully for {s['name']}!" -ForegroundColor Green
+Write-Host "  Netflix will be controlled automatically from now on." -ForegroundColor Green
+Write-Host "  You can close this window." -ForegroundColor DarkGray
 Write-Host ""
+pause
 '''
 
     return Response(
         script,
         content_type='text/plain',
-        headers={
+        headers={{
             'Content-Disposition':
                 f'attachment; filename="Install_Guardian_{s["name"]}.ps1"'
-        },
+        }},
     )
-
 
 @app.route('/api/students/<int:sid>/profile/android')
 def android_config(sid):
